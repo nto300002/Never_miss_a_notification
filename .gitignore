@@ -1,0 +1,85 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-electron/
+out/
+build/
+
+# Development
+.vite/
+.cache/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# API Credentials (IMPORTANT: Never commit these!)
+credentials.json
+token.json
+.google-credentials.json
+*.pem
+*.key
+
+# Electron
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
+*.snap
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+.tmp/
+
+# Electron-builder output
+release/
+
+# electron-store (local storage)
+# Note: コミットする場合は設定のテンプレートのみ
+# electron-store/
+
+# Logs
+logs/
+*.log
+
+# Lock files (pnpm uses pnpm-lock.yaml)
+package-lock.json
+yarn.lock

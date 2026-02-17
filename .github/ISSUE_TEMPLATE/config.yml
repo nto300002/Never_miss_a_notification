@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 質問・サポート
+    url: https://github.com/yourusername/notifyforce/discussions
+    about: 使い方の質問やサポートはDiscussionsへ
+  - name: 📖 ドキュメント
+    url: https://github.com/yourusername/notifyforce/blob/main/README.md
+    about: README.mdで設定方法やAPIキーの取得方法を確認
