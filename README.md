@@ -46,14 +46,75 @@ pnpm run build
 
 ### Slack (Socket Mode)
 
-1. [Slack API](https://api.slack.com/apps) で App を作成
-2. **Socket Mode** を有効化
-3. **Bot Token Scopes** を設定:
-   - `channels:history` - チャンネルメッセージ読み取り
-   - `channels:read` - チャンネル情報読み取り
-   - `users:read` - ユーザー情報読み取り
-4. **App-Level Token** を生成 (`connections:write` scope)
-5. 設定画面で Bot Token (`xoxb-...`) と App Token (`xapp-...`) を入力
+#### 1. Slack Appの作成
+1. [Slack API](https://api.slack.com/apps) にアクセスし「Create New App」をクリック
+2. 「From scratch」を選択し、App名とワークスペースを指定
+
+#### 2. Socket Modeの有効化
+1. **Settings > Socket Mode** で「Enable Socket Mode」をONにする
+2. Socket Modeは2019年12月以降作成のアプリで利用可能（granular permissions必須）
+
+#### 3. App-Level Tokenの生成
+1. **Settings > Basic Information > App-Level Tokens** へ移動
+2. 「Generate Token and Scopes」をクリック
+3. Token名を入力し、**`connections:write`** スコープを追加
+4. 生成されたトークン（`xapp-...`）を保存
+
+#### 4. Bot Token Scopesの設定
+
+**Features > OAuth & Permissions > Scopes** へ移動し、以下のスコープを追加します。
+
+##### 📌 Bot Token Scopes vs User Token Scopes の違い
+
+| トークンタイプ | 説明 | 使用場面 |
+|--------------|------|---------|
+| **Bot Token Scopes** | ボットとして独立して動作（ユーザーに紐づかない） | **通知アプリはこちらを使用** - インストールユーザーが退職してもアプリが動作し続ける |
+| **User Token Scopes** | 特定ユーザーの代わりに操作（ユーザーとして投稿など） | ユーザーなりすまし投稿が必要な場合のみ |
+
+⚠️ **重要**: NotifyForceでは**Bot Token Scopesのみ**を使用します。User Token Scopesは不要です。
+
+##### 🔧 追加するBot Token Scopes
+
+**Features > OAuth & Permissions > Bot Token Scopes** セクションで以下を追加:
+
+| スコープ | 説明 | 必要性 |
+|---------|------|--------|
+| `channels:history` | 公開チャンネルのメッセージ履歴を読み取り | **必須** - message.channels イベント受信に必要 |
+| `channels:read` | 公開チャンネルの基本情報を取得 | **必須** - チャンネル名・ID取得 |
+| `groups:history` | プライベートチャンネルのメッセージ履歴を読み取り | 任意 - プライベートチャンネル監視時 |
+| `im:history` | DMのメッセージ履歴を読み取り | 任意 - DM監視時 |
+| `users:read` | ユーザー情報（名前・アイコン）を取得 | 推奨 - 送信者情報表示 |
+| `chat:write` | メッセージ送信 | 任意 - 自動応答機能用 |
+
+⚠️ **セキュリティのベストプラクティス**: 必要最小限のスコープのみ追加してください
+
+#### 5. Event Subscriptionsの設定
+1. **Features > Event Subscriptions** で「Enable Events」をONにする
+2. **Subscribe to bot events** で以下のイベントタイプを追加:
+
+| イベントタイプ | 説明 | 必要スコープ |
+|--------------|------|-------------|
+| `message.channels` | 公開チャンネルの新規メッセージ | `channels:history` |
+| `message.groups` | プライベートチャンネルの新規メッセージ | `groups:history` |
+| `message.im` | DMの新規メッセージ | `im:history` |
+| `app_mention` | @mention通知 | `app_mentions:read` |
+
+3. 「Save Changes」をクリック
+
+#### 6. Appのインストール
+1. **Settings > Install App** で「Install to Workspace」をクリック
+2. 権限を確認して「許可する」
+3. 生成された **Bot User OAuth Token** (`xoxb-...`) を保存
+
+#### 7. アプリへの設定入力
+- **Bot Token**: `xoxb-...` （OAuth & Permissionsで取得）
+- **App Token**: `xapp-...` （App-Level Tokensで取得）
+
+#### 参考情報
+- 📚 [公式ドキュメント: Socket Mode](https://docs.slack.dev/apis/events-api/using-socket-mode/)
+- 🔧 [Bolt フレームワーク](https://slack.dev/bolt-js/)（推奨: 実装を簡素化）
+- 🔍 [スコープリファレンス](https://api.slack.com/scopes)
+- 📡 [Events API](https://api.slack.com/events/message.channels)
 
 ### Chatwork
 
