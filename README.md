@@ -124,12 +124,67 @@ pnpm run build
 
 ### Gmail
 
+#### 1. Google Cloud Consoleでの設定
 1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクト作成
-2. Gmail API を有効化
-3. OAuth 2.0 クライアントを作成（デスクトップアプリ）
-4. `credentials.json` をダウンロード
-5. 設定画面でファイルパスを指定
-6. 初回起動時にブラウザで認証
+2. **Gmail API** を有効化（APIライブラリから検索）
+3. **認証情報 > 認証情報を作成 > OAuth クライアント ID** を選択
+4. アプリケーションの種類: **デスクトップアプリ** を選択
+5. 名前を入力して「作成」をクリック
+
+#### 2. 認証情報のダウンロード
+
+**方法A: credentials.json をダウンロード（推奨）**
+- 作成したOAuth 2.0クライアントIDの右側にある「ダウンロード（⬇️）」ボタンをクリック
+- JSONファイルをダウンロードし、`credentials.json` にリネーム
+
+**方法B: CLIENT_IDとシークレットを手動設定（上級者向け）**
+- OAuth 2.0クライアントIDの詳細画面から以下をコピー:
+  - `client_id`
+  - `client_secret`
+  - `redirect_uris` (通常は `http://localhost` または `urn:ietf:wg:oauth:2.0:oob`)
+- 手動でJSON形式に整形してアプリに設定
+
+##### 📌 credentials.json の中身
+
+```json
+{
+  "installed": {
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "project_id": "your-project-id",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "YOUR_CLIENT_SECRET",
+    "redirect_uris": ["http://localhost"]
+  }
+}
+```
+
+##### 🔐 セキュリティに関する重要な注意
+
+> **デスクトップアプリの `client_secret` は秘密ではありません**
+>
+> Googleの公式ドキュメントによると：
+> - デスクトップアプリはユーザーのマシンで動作するため、ソースコードに埋め込まれた認証情報は簡単に抽出できる
+> - **「client_secretは秘密として扱われない」**（"the client secret is obviously not treated as a secret"）
+> - GitHubなどの公開リポジトリに含めても問題ない（ただし推奨はしない）
+> - 実際のセキュリティは**OAuth 2.0のユーザー認証フロー**によって保護される
+
+**なぜ credentials.json が推奨されるのか？**
+- ✅ Google公式SDKの標準形式
+- ✅ auth_uri、token_uri、redirect_urisなどの設定ミスを防ぐ
+- ✅ 一括管理が容易
+- ✅ CLIENT_IDとシークレットだけでも技術的には可能だが、手動設定は煩雑
+
+#### 3. アプリへの設定
+1. 設定画面で `credentials.json` のファイルパスを指定
+2. 初回起動時にブラウザで認証
+3. 認証後、`token.json` が自動生成され、以降は自動ログイン
+
+#### 参考情報
+- 📚 [OAuth 2.0 for Desktop Apps](https://developers.google.com/identity/protocols/oauth2/native-app)
+- 🔒 [Client secrets in desktop apps (GitHub Issue)](https://github.com/googleapis/google-auth-library-nodejs/issues/959)
+- 📖 [Using OAuth 2.0 to Access Google APIs](https://developers.google.com/identity/protocols/oauth2)
 
 ---
 
