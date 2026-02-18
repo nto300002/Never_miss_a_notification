@@ -216,18 +216,21 @@ notifications.sort((a, b) => {
 - `electron/services/gmail.ts` の実装
 - OAuth2 認証フロー
 - 15秒間隔でポーリング
+- credentials.json ファイルアップロード機能
 
 **Acceptance Criteria**:
 - [ ] OAuth2認証フローが動作する
-- [ ] `credentials.json` からクライアント情報を読み込む
+- [ ] アップロードされた `credentials.json` から認証情報を読み込む
 - [ ] 新着メールを検出できる
 - [ ] トークンリフレッシュが自動で行われる
+- [ ] credentials.json のバリデーションが動作する
 
 **技術スタック**:
 - `googleapis`
 
 **参考**:
 - [Gmail API Node.js Quickstart](https://developers.google.com/gmail/api/quickstart/nodejs)
+- README.md 125-177行目 (Gmail設定手順)
 
 ---
 
@@ -258,11 +261,107 @@ notifications.sort((a, b) => {
 - `src/pages/SettingsPage.tsx` の実装
 - API設定フォーム
 - ショートカットキー設定
+- credentials.json ファイルアップロード機能
 
 **Acceptance Criteria**:
 - [ ] Slack/Chatwork/Gmail の設定フォームが表示される
 - [ ] 入力値のバリデーションが動作する
 - [ ] 保存ボタンで設定が永続化される
+- [ ] Gmail設定でファイルアップロードボタンが表示される
+- [ ] アップロードされたファイルの内容が表示される（client_id, project_id）
+- [ ] 不正なJSONファイルの場合、エラーメッセージが表示される
+
+**Gmail credentials.json アップロード仕様**:
+
+#### UI要件
+```tsx
+// Gmail設定セクション
+<div className="gmail-settings">
+  <h3>Gmail API 設定</h3>
+
+  {/* ファイルアップロードボタン */}
+  <div className="file-upload">
+    <input
+      type="file"
+      accept=".json"
+      onChange={handleCredentialsUpload}
+      style={{ display: 'none' }}
+      ref={fileInputRef}
+    />
+    <button onClick={() => fileInputRef.current?.click()}>
+      📁 credentials.json をアップロード
+    </button>
+  </div>
+
+  {/* アップロード成功時の表示 */}
+  {credentials && (
+    <div className="credentials-info">
+      ✅ 認証情報が読み込まれました
+      <ul>
+        <li>Client ID: {credentials.installed.client_id}</li>
+        <li>Project ID: {credentials.installed.project_id}</li>
+      </ul>
+    </div>
+  )}
+
+  {/* エラー表示 */}
+  {error && (
+    <div className="error-message">
+      ❌ {error}
+    </div>
+  )}
+</div>
+```
+
+#### バリデーション要件
+- [ ] ファイル拡張子が `.json` であることを確認
+- [ ] JSON形式として正しくパースできることを確認
+- [ ] 必須フィールドの存在確認:
+  - `installed.client_id`
+  - `installed.client_secret`
+  - `installed.auth_uri`
+  - `installed.token_uri`
+  - `installed.redirect_uris`
+- [ ] client_id が `.apps.googleusercontent.com` で終わることを確認
+
+#### ファイル保存仕様
+- **保存先**: `{userData}/credentials.json`
+  - macOS: `~/Library/Application Support/NotifyForce/credentials.json`
+  - Windows: `%APPDATA%/NotifyForce/credentials.json`
+  - Linux: `~/.config/NotifyForce/credentials.json`
+- **権限**: 600 (所有者のみ読み書き可能)
+- **暗号化**: 必要に応じて `electron.safeStorage` で暗号化
+
+#### エラーメッセージ
+- ファイルが選択されていない: "ファイルを選択してください"
+- JSON形式が不正: "不正なJSON形式です"
+- 必須フィールド不足: "credentials.jsonに必要な情報が含まれていません"
+- client_id形式が不正: "Google Cloud Consoleからダウンロードしたファイルではありません"
+
+#### IPC通信
+```typescript
+// Preload
+window.electron = {
+  // ...
+  uploadCredentials: (jsonContent: string) => Promise<CredentialsInfo>
+  loadCredentials: () => Promise<CredentialsInfo | null>
+}
+
+// Main Process
+ipcMain.handle('upload-credentials', async (event, jsonContent) => {
+  try {
+    const credentials = JSON.parse(jsonContent);
+    validateCredentials(credentials);
+    await saveCredentials(credentials);
+    return {
+      clientId: credentials.installed.client_id,
+      projectId: credentials.installed.project_id
+    };
+  } catch (error) {
+    throw new Error('credentials.jsonの処理に失敗しました');
+  }
+});
+```
 
 ---
 
@@ -361,6 +460,157 @@ notifications.sort((a, b) => {
 
 ---
 
+### [TASK-019-A] 🔴 credentials.json バリデーション実装
+**優先度**: P0 | **ステータス**: ⬜ TODO
+
+**説明**:
+- アップロードされた credentials.json の厳格な検証
+- ファイル権限の設定
+- セキュアな保存処理
+
+**Acceptance Criteria**:
+- [ ] JSON形式の検証が動作する
+- [ ] 必須フィールドの存在確認が動作する
+- [ ] 悪意あるファイルパスの除外 (Path Traversal対策)
+- [ ] ファイル権限が600に設定される
+- [ ] バリデーションのユニットテストが通る
+
+**実装例**:
+```typescript
+// electron/services/credentialsValidator.ts
+interface GoogleCredentials {
+  installed: {
+    client_id: string;
+    client_secret: string;
+    project_id: string;
+    auth_uri: string;
+    token_uri: string;
+    auth_provider_x509_cert_url: string;
+    redirect_uris: string[];
+  };
+}
+
+export function validateCredentials(data: unknown): GoogleCredentials {
+  // JSON形式チェック
+  if (typeof data !== 'object' || data === null) {
+    throw new Error('Invalid JSON format');
+  }
+
+  const creds = data as any;
+
+  // 必須フィールドチェック
+  if (!creds.installed) {
+    throw new Error('Missing "installed" field');
+  }
+
+  const required = [
+    'client_id',
+    'client_secret',
+    'project_id',
+    'auth_uri',
+    'token_uri',
+    'redirect_uris'
+  ];
+
+  for (const field of required) {
+    if (!creds.installed[field]) {
+      throw new Error(`Missing required field: ${field}`);
+    }
+  }
+
+  // client_id 形式チェック
+  if (!creds.installed.client_id.endsWith('.apps.googleusercontent.com')) {
+    throw new Error('Invalid client_id format');
+  }
+
+  // auth_uri / token_uri が Google のドメインであることを確認
+  const authUri = new URL(creds.installed.auth_uri);
+  const tokenUri = new URL(creds.installed.token_uri);
+
+  if (!authUri.hostname.endsWith('google.com')) {
+    throw new Error('Invalid auth_uri domain');
+  }
+
+  if (!tokenUri.hostname.endsWith('googleapis.com') &&
+      !tokenUri.hostname.endsWith('google.com')) {
+    throw new Error('Invalid token_uri domain');
+  }
+
+  return creds as GoogleCredentials;
+}
+
+export async function saveCredentials(
+  credentials: GoogleCredentials,
+  userDataPath: string
+): Promise<void> {
+  const filePath = path.join(userDataPath, 'credentials.json');
+
+  // ファイル保存
+  await fs.promises.writeFile(
+    filePath,
+    JSON.stringify(credentials, null, 2),
+    { mode: 0o600 } // 所有者のみ読み書き可能
+  );
+
+  // macOS/Linux: パーミッション再確認
+  if (process.platform !== 'win32') {
+    await fs.promises.chmod(filePath, 0o600);
+  }
+}
+```
+
+**セキュリティ要件**:
+- [ ] Path Traversal攻撃の防止 (`../../etc/passwd` など)
+- [ ] ファイルサイズ制限 (最大 10KB)
+- [ ] auth_uri/token_uri のドメイン検証 (Google以外を拒否)
+- [ ] redirect_uris の検証 (localhost または oob のみ許可)
+
+**テストケース**:
+```typescript
+describe('credentialsValidator', () => {
+  it('should accept valid credentials.json', () => {
+    const valid = {
+      installed: {
+        client_id: '123.apps.googleusercontent.com',
+        client_secret: 'secret',
+        project_id: 'project-123',
+        auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+        token_uri: 'https://oauth2.googleapis.com/token',
+        auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+        redirect_uris: ['http://localhost']
+      }
+    };
+    expect(() => validateCredentials(valid)).not.toThrow();
+  });
+
+  it('should reject missing client_id', () => {
+    const invalid = { installed: {} };
+    expect(() => validateCredentials(invalid)).toThrow('Missing required field');
+  });
+
+  it('should reject invalid auth_uri domain', () => {
+    const invalid = {
+      installed: {
+        client_id: '123.apps.googleusercontent.com',
+        client_secret: 'secret',
+        project_id: 'project-123',
+        auth_uri: 'https://evil.com/oauth',
+        token_uri: 'https://oauth2.googleapis.com/token',
+        redirect_uris: ['http://localhost']
+      }
+    };
+    expect(() => validateCredentials(invalid)).toThrow('Invalid auth_uri domain');
+  });
+
+  it('should reject files larger than 10KB', async () => {
+    const largeFile = 'x'.repeat(11 * 1024);
+    await expect(uploadCredentials(largeFile)).rejects.toThrow('File too large');
+  });
+});
+```
+
+---
+
 ## 📦 Phase 7: ビルド・リリース
 
 ### [TASK-019] 🟡 electron-builder 設定
@@ -437,10 +687,10 @@ notifications.sort((a, b) => {
 | Phase 3 | 4 | 0 | 0 | 4 |
 | Phase 4 | 2 | 0 | 0 | 2 |
 | Phase 5 | 3 | 0 | 0 | 3 |
-| Phase 6 | 2 | 0 | 0 | 2 |
+| Phase 6 | 3 | 0 | 0 | 3 |
 | Phase 7 | 2 | 0 | 0 | 2 |
 | Phase 8 | 4 | 0 | 0 | 4 |
-| **合計** | **24** | **0** | **0** | **24** |
+| **合計** | **25** | **0** | **0** | **25** |
 
 ---
 
