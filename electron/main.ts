@@ -1,5 +1,15 @@
-import { app, BrowserWindow, globalShortcut, Tray, Menu, nativeImage } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  Tray,
+  Menu,
+  nativeImage,
+  ipcMain,
+  shell,
+} from 'electron';
 import path from 'path';
+import { isAllowedMeetingUrl } from './utils/urlValidator';
 
 // Disable GPU acceleration for better compatibility
 app.disableHardwareAcceleration();
@@ -89,8 +99,8 @@ function createTray() {
 }
 
 function registerGlobalShortcut() {
-  // Register Ctrl+Shift+N (Cmd+Shift+N on macOS)
-  const shortcut = process.platform === 'darwin' ? 'Cmd+Shift+N' : 'Ctrl+Shift+N';
+  // Register Ctrl+Shift+Q (both macOS and Windows/Linux use Control)
+  const shortcut = 'Ctrl+Shift+Q';
 
   const registered = globalShortcut.register(shortcut, () => {
     if (mainWindow?.isVisible()) {
@@ -128,6 +138,51 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   // Unregister all shortcuts
   globalShortcut.unregisterAll();
+});
+
+// ========================================
+// IPC Handlers
+// ========================================
+
+// 会議URLを開く（urlValidator でホワイトリスト検証）
+ipcMain.on('meeting:open', (_event, url: string) => {
+  if (!isAllowedMeetingUrl(url)) {
+    console.error('Blocked URL:', url);
+    return;
+  }
+  shell.openExternal(url);
+});
+
+// ウィンドウ制御
+ipcMain.on('window:minimize', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.on('window:close', () => {
+  mainWindow?.hide();
+});
+
+// 通知操作（将来の実装用）
+ipcMain.on('notification:dismiss', (_event, id: string) => {
+  console.log('Dismiss notification:', id);
+  // TODO: 通知を削除する処理
+});
+
+ipcMain.on('notification:dismissAll', () => {
+  console.log('Dismiss all notifications');
+  // TODO: 全通知を削除する処理
+});
+
+// 設定の保存・読み込み（将来の実装用）
+ipcMain.handle('settings:save', async (_event, config: any) => {
+  console.log('Save settings:', config);
+  // TODO: electron-storeを使用して設定を保存
+});
+
+ipcMain.handle('settings:load', async () => {
+  console.log('Load settings');
+  // TODO: electron-storeを使用して設定を読み込み
+  return {};
 });
 
 // Add custom property to app
