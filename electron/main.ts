@@ -9,7 +9,6 @@ import {
   shell,
 } from 'electron';
 import path from 'path';
-import { isAllowedMeetingUrl } from './utils/urlValidator';
 
 // Disable GPU acceleration for better compatibility
 app.disableHardwareAcceleration();
@@ -28,6 +27,7 @@ function createWindow() {
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -144,13 +144,41 @@ app.on('will-quit', () => {
 // IPC Handlers
 // ========================================
 
-// 会議URLを開く（urlValidator でホワイトリスト検証）
+// 会議URLを開く
 ipcMain.on('meeting:open', (_event, url: string) => {
-  if (!isAllowedMeetingUrl(url)) {
-    console.error('Blocked URL:', url);
-    return;
+  // URLのバリデーション（セキュリティ対策）
+  try {
+    const parsedUrl = new URL(url);
+    const allowedProtocols = ['https:', 'http:'];
+    const allowedDomains = [
+      'zoom.us',
+      'meet.google.com',
+      'teams.microsoft.com',
+      'webex.com',
+    ];
+
+    // プロトコルチェック
+    if (!allowedProtocols.includes(parsedUrl.protocol)) {
+      console.error('Invalid protocol:', parsedUrl.protocol);
+      return;
+    }
+
+    // ドメインチェック
+    const isAllowedDomain = allowedDomains.some(
+      (domain) =>
+        parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`)
+    );
+
+    if (!isAllowedDomain) {
+      console.error('Invalid domain:', parsedUrl.hostname);
+      return;
+    }
+
+    // 安全にURLを開く
+    shell.openExternal(url);
+  } catch (error) {
+    console.error('Invalid URL:', error);
   }
-  shell.openExternal(url);
 });
 
 // ウィンドウ制御
