@@ -1,7 +1,7 @@
 import type { Notification } from './notification';
 
 export interface ElectronAPI {
-  onNotification: (callback: (notification: Notification) => void) => void;
+  onNotification: (callback: (notification: Notification) => void) => () => void;
   dismissNotification: (id: string) => void;
   dismissAllNotifications: () => void;
   openMeetingUrl: (url: string) => void;

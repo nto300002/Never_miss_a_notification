@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electron', {
   // Notification API
   onNotification: (callback: (notification: any) => void) => {
     ipcRenderer.on('notification:new', (_event, notification) => callback(notification));
+    // クリーンアップ用に登録した関数を返す
+    return () => ipcRenderer.removeAllListeners('notification:new');
   },
 
   dismissNotification: (id: string) => {

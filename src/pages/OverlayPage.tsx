@@ -5,7 +5,11 @@ import { DEMO_NOTIFICATIONS } from '../data/demoNotifications';
 import { sortNotifications } from '../utils/notificationSort';
 
 export function OverlayPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(DEMO_NOTIFICATIONS);
+  // Electron 内では空スタート（実通知のみ表示）、ブラウザ preview ではデモデータを表示
+  const isElectron = navigator.userAgent.includes('Electron');
+  const [notifications, setNotifications] = useState<Notification[]>(
+    isElectron ? [] : DEMO_NOTIFICATIONS
+  );
   const [visible, setVisible] = useState(true);
 
   // 会議通知の数をカウント
@@ -33,13 +37,13 @@ export function OverlayPage() {
     }
   };
 
-  // Electron APIから通知を受信（将来の実装）
+  // Electron APIから通知を受信
   useEffect(() => {
-    if (window.electron?.onNotification) {
-      window.electron.onNotification((notification: Notification) => {
-        setNotifications((prev) => [notification, ...prev]);
-      });
-    }
+    if (!window.electron?.onNotification) return;
+    const cleanup = window.electron.onNotification((notification: Notification) => {
+      setNotifications((prev) => [notification, ...prev]);
+    });
+    return cleanup;
   }, []);
 
   // Ctrl+Shift+Q でトグル

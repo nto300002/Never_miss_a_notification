@@ -9,12 +9,18 @@ import {
   shell,
 } from 'electron';
 import path from 'path';
+import { SlackService } from './services/slack/slackService';
+import type { Notification } from '../src/types/notification';
 
 // Disable GPU acceleration for better compatibility
 app.disableHardwareAcceleration();
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let slackService: SlackService | null = null;
+
+// 通知ストア（メインプロセスで管理）
+const notifications: Notification[] = [];
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
@@ -116,11 +122,38 @@ function registerGlobalShortcut() {
   }
 }
 
+function startSlackService() {
+  const appToken = process.env.APP_TOKEN;
+  const botToken = process.env.BOT_TOKEN;
+
+  if (!appToken || !botToken) {
+    console.warn('[Slack] APP_TOKEN / BOT_TOKEN が未設定のため Slack 連携をスキップします');
+    return;
+  }
+
+  slackService = new SlackService({ appToken, botToken });
+
+  slackService.onNotification((notification) => {
+    notifications.push(notification);
+    mainWindow?.webContents.send('notification:new', notification);
+    // 通知受信時にウィンドウを前面に出す
+    if (!mainWindow?.isVisible()) {
+      mainWindow?.show();
+    }
+    mainWindow?.focus();
+  });
+
+  slackService.start().catch((err) => {
+    console.error('[Slack] 接続エラー:', err);
+  });
+}
+
 // App lifecycle
 app.whenReady().then(() => {
   createWindow();
   createTray();
   registerGlobalShortcut();
+  startSlackService();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -136,8 +169,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  // Unregister all shortcuts
   globalShortcut.unregisterAll();
+  slackService?.stop().catch((err) => console.error('[Slack] 停止エラー:', err));
 });
 
 // ========================================
@@ -190,15 +223,14 @@ ipcMain.on('window:close', () => {
   mainWindow?.hide();
 });
 
-// 通知操作（将来の実装用）
+// 通知操作
 ipcMain.on('notification:dismiss', (_event, id: string) => {
-  console.log('Dismiss notification:', id);
-  // TODO: 通知を削除する処理
+  const index = notifications.findIndex((n) => n.id === id);
+  if (index !== -1) notifications.splice(index, 1);
 });
 
 ipcMain.on('notification:dismissAll', () => {
-  console.log('Dismiss all notifications');
-  // TODO: 全通知を削除する処理
+  notifications.length = 0;
 });
 
 // 設定の保存・読み込み（将来の実装用）

@@ -28,6 +28,7 @@ export function NotificationCard({ notification, onDismiss, index }: Notificatio
 
   return (
     <div
+      data-testid="notification-card"
       style={{
         margin: '0 8px 6px',
         borderRadius: 12,
